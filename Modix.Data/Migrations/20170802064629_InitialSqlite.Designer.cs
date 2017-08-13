@@ -8,14 +8,13 @@ using Modix.Data;
 namespace Modix.Data.Migrations
 {
     [DbContext(typeof(ModixContext))]
-    [Migration("20170223203743_BetterStructure")]
-    partial class BetterStructure
+    [Migration("20170802064629_InitialSqlite")]
+    partial class InitialSqlite
     {
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
             modelBuilder
-                .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.SerialColumn)
-                .HasAnnotation("ProductVersion", "1.1.0-rtm-22752");
+                .HasAnnotation("ProductVersion", "1.1.2");
 
             modelBuilder.Entity("Modix.Data.Models.Ban", b =>
                 {
@@ -39,6 +38,24 @@ namespace Modix.Data.Migrations
                     b.ToTable("Bans");
                 });
 
+            modelBuilder.Entity("Modix.Data.Models.ChannelLimit", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd();
+
+                    b.Property<long>("ChannelId");
+
+                    b.Property<int?>("GuildId");
+
+                    b.Property<string>("ModuleName");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GuildId");
+
+                    b.ToTable("ChannelLimits");
+                });
+
             modelBuilder.Entity("Modix.Data.Models.DiscordGuild", b =>
                 {
                     b.Property<int>("Id")
@@ -52,11 +69,13 @@ namespace Modix.Data.Migrations
 
                     b.Property<string>("Name");
 
-                    b.Property<long>("OwnerId");
+                    b.Property<int>("OwnerId");
 
                     b.HasKey("Id");
 
                     b.HasIndex("ConfigId");
+
+                    b.HasIndex("OwnerId");
 
                     b.ToTable("Guilds");
                 });
@@ -66,7 +85,7 @@ namespace Modix.Data.Migrations
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd();
 
-                    b.Property<string[]>("Attachments");
+                    b.Property<string>("Attachments");
 
                     b.Property<int?>("AuthorId");
 
@@ -104,7 +123,7 @@ namespace Modix.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("DiscordUser");
+                    b.ToTable("Users");
                 });
 
             modelBuilder.Entity("Modix.Data.Models.GuildConfig", b =>
@@ -130,11 +149,23 @@ namespace Modix.Data.Migrations
                         .HasForeignKey("GuildId");
                 });
 
+            modelBuilder.Entity("Modix.Data.Models.ChannelLimit", b =>
+                {
+                    b.HasOne("Modix.Data.Models.DiscordGuild", "Guild")
+                        .WithMany()
+                        .HasForeignKey("GuildId");
+                });
+
             modelBuilder.Entity("Modix.Data.Models.DiscordGuild", b =>
                 {
                     b.HasOne("Modix.Data.Models.GuildConfig", "Config")
                         .WithMany()
                         .HasForeignKey("ConfigId");
+
+                    b.HasOne("Modix.Data.Models.DiscordUser", "Owner")
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Cascade);
                 });
 
             modelBuilder.Entity("Modix.Data.Models.DiscordMessage", b =>

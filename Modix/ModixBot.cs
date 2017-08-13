@@ -10,6 +10,7 @@ using Discord.WebSocket;
 using Modix.Data.Models;
 using Newtonsoft.Json;
 using Serilog;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Modix
 {
@@ -20,7 +21,7 @@ namespace Modix
             LogLevel = LogSeverity.Debug
         });
         private DiscordSocketClient _client;
-        private readonly DependencyMap _map = new DependencyMap();
+        private readonly IServiceCollection _map = new ServiceCollection();
         private readonly ModixBotHooks _hooks = new ModixBotHooks();
         private ModixConfig _config = new ModixConfig();
 
@@ -35,11 +36,7 @@ namespace Modix
 
         public async Task Run()
         {
-            if (!await LoadConfig())
-            {
-                return;
-            }
-
+            LoadConfig();
             _client = new DiscordSocketClient(config: new DiscordSocketConfig()
             {
                 LogLevel = LogSeverity.Debug,
@@ -51,24 +48,15 @@ namespace Modix
             await Task.Delay(-1);
         }
 
-        public async Task<bool> LoadConfig()
+        public void LoadConfig()
         {
-            if (!File.Exists("config/conf.json"))
+            _config = new ModixConfig
             {
-                Log.Fatal("Configfile is missing. Generating a new one.");
-
-                if (!Directory.Exists("config"))
-                {
-                    Directory.CreateDirectory("config");
-                }
-
-                await Task.Run(() => File.WriteAllText("config/conf.json", JsonConvert.SerializeObject(_config)));
-                Log.Information("Configfile config/conf.json created.");
-                return false;
-            }
-
-            _config = JsonConvert.DeserializeObject<ModixConfig>(File.ReadAllText("config/conf.json"));
-            return true; 
+                DiscordToken = Environment.GetEnvironmentVariable("Token"),
+                ReplToken = Environment.GetEnvironmentVariable("ReplToken"),
+                StackoverflowToken = Environment.GetEnvironmentVariable("StackoverflowToken"),
+                PostgreConnectionString = Environment.GetEnvironmentVariable("MODIX_DB_CONNECTION")
+            };
         }
 
         public async Task HandleCommand(SocketMessage messageParam)
@@ -85,20 +73,16 @@ namespace Modix
                 return;
 
             var context = new CommandContext(_client, message);
-            var result = await _commands.ExecuteAsync(context, argPos, _map);
-
-            if (!result.IsSuccess)
-            {
-                await context.Channel.SendMessageAsync(result.ErrorReason);
-            }
+            var result = await _commands.ExecuteAsync(context, argPos, _map.BuildServiceProvider());
+            
             stopwatch.Stop();
             Log.Information($"Took {stopwatch.ElapsedMilliseconds}ms to process: {message}");
         }
 
         public async Task Install()
         {
-            _map.Add(_client);
-            _map.Add(_config);
+            _map.AddSingleton(_client);
+            _map.AddSingleton(_config);
 
             _client.MessageReceived += HandleCommand;
             _client.MessageReceived += _hooks.HandleMessage;
