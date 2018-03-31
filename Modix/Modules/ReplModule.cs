@@ -29,6 +29,7 @@ namespace Modix.Modules
     public class ReplModule : ModuleBase
     {
         private const string ReplRemoteUrl = "http://CSDiscord/Eval";
+        private const string BFReplRemoteUrl = "http://CSDiscord/BFEval";
 
         private readonly ModixConfig _config;
 
@@ -59,6 +60,56 @@ namespace Modix.Modules
             {
                 var tokenSrc = new CancellationTokenSource(30000);
                 res = await _client.PostAsync(ReplRemoteUrl, content, tokenSrc.Token);
+            }
+            catch (TaskCanceledException)
+            {
+                await message.ModifyAsync(a => { a.Content = $"Gave up waiting for a response from the REPL service."; });
+                return;
+            }
+            catch (Exception ex)
+            {
+                await message.ModifyAsync(a => { a.Content = $"Exec failed: {ex.Message}"; });
+                return;
+            }
+
+            if (!res.IsSuccessStatusCode & res.StatusCode != HttpStatusCode.BadRequest)
+            {
+                await message.ModifyAsync(a => { a.Content = $"Exec failed: {res.StatusCode}"; });
+                return;
+            }
+
+            var parsedResult = JsonConvert.DeserializeObject<Result>(await res.Content.ReadAsStringAsync());
+
+            var embed = BuildEmbed(guildUser, parsedResult);
+
+            await message.ModifyAsync(a =>
+            {
+                a.Content = string.Empty;
+                a.Embed = embed.Build();
+            });
+
+            await Context.Message.DeleteAsync();
+        }
+
+        [Command("brainfuck", RunMode = RunMode.Async), Alias("bfeval", "brainfk", "f*ckit", "fuckit", "brainf*ck"), Summary("Executes brainfuck code!")]
+        public async Task BFReplInvoke([Remainder] string code)
+        {
+            if (code.Length > 1024)
+            {
+                await ReplyAsync("Exec failed: Code is greater than 1024 characters in length");
+                return;
+            }
+
+            var guildUser = Context.User as SocketGuildUser;
+            var message = await Context.Channel.SendMessageAsync("Working...");
+
+            var content = BuildContent(code);
+
+            HttpResponseMessage res;
+            try
+            {
+                var tokenSrc = new CancellationTokenSource(30000);
+                res = await _client.PostAsync(BFReplRemoteUrl, content, tokenSrc.Token);
             }
             catch (TaskCanceledException)
             {
